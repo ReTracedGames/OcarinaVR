@@ -28,8 +28,8 @@ lift a pot and throw it, pull the slingshot's pouch back with your other hand.
 > and please report what you find.
 
 <p align="center">
-  <img src="images/screen-hands.jpg" width="49%" alt="Your own hands are Link's hands: bare hands tracked by the headset, in the castle town">
-  <img src="images/screen-sword.jpg" width="49%" alt="The sword in your own hand, in front of Hyrule Castle">
+  <img src="images/screen-hands.jpg" width="49%" alt="Your own hands are Link's hands: the adult Link's gloved hands, in Hyrule Field">
+  <img src="images/screen-sword.jpg" width="49%" alt="The Master Sword and the Hylian Shield in your own hands">
 </p>
 
 <p align="center">
