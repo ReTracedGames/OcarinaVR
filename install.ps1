@@ -17,6 +17,7 @@ param(
     [string]$Romfs = '',
     [string]$Exefs = '',
     [string]$Language = 'en-US',
+    [string]$SwordHand = '',      # right or left (asked in a window when started by a double-click)
     [switch]$CoreOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -65,6 +66,11 @@ if (-not $CoreOnly -and -not $Game -and -not ($Romfs -and $Exefs)) {
     $dlg.Filter = 'Game file (*.nup)|*.nup|All files (*.*)|*.*'
     if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { throw 'No game file chosen. See README.md.' }
     $Game = $dlg.FileName
+    if (-not $SwordHand) {
+        $ask = [System.Windows.Forms.MessageBox]::Show("Which hand holds the sword?`n`nYes: your RIGHT hand (most players).`nNo: your LEFT hand, as Link himself holds it.`n`nYou can change it later in game" + [char]92 + "retraced.ini (vr_left_handed).",
+                                                       'OcarinaVR: sword hand', 'YesNo', 'Question')
+        $SwordHand = if ($ask -eq [System.Windows.Forms.DialogResult]::No) { 'left' } else { 'right' }
+    }
 }
 if ($Game -and -not (Test-Path -LiteralPath $Game)) { throw "game file not found: $Game" }
 New-Item -ItemType Directory -Force $dl, $tools | Out-Null
@@ -137,6 +143,14 @@ Say 'The VR mode itself (retraced.dll)'
 $vk = Get-ChildItem (Join-Path $cpm 'vulkanheaders') -Directory | Sort-Object Name | Select-Object -Last 1
 & (Join-Path $root 'tools\build-core.ps1') -Mingw $mingw -Vulkan (Join-Path $vk.FullName 'include') -OpenXR $xr -Out $out
 if ($LASTEXITCODE -ne 0) { throw 'retraced.dll did not build' }
+if ($SwordHand) {   # (the sword hand chosen: written in the game's settings file)
+    $ini = Join-Path $out 'retraced.ini'
+    $left = if ($SwordHand -eq 'left') { 1 } else { 0 }
+    $lines = @(Get-Content -LiteralPath $ini | Where-Object { $_ -notmatch '^\s*vr_left_handed\s*=' })
+    $lines += "vr_left_handed = $left  ; 1: the sword in your left hand, as Link holds it, the shield on your right arm"
+    Set-Content -LiteralPath $ini -Value $lines -Encoding ascii
+    "sword hand: $SwordHand"
+}
 
 Say "Link's arms and skeleton, read from your game's files"
 $env:RETRACED_GAME_DIR = $out

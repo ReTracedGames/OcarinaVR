@@ -283,6 +283,7 @@ bool g_two_hands = true;         // vr_two_hands: the string of a bow, the pouch
 bool g_parts_study = false;      // (study) vr_parts_study = 1: the parts of a thing held with both hands, in the journal
 int g_gestures = 1;              // vr_gestures: the player's movements are the game's commands
 int g_main = 1;                  // vr_main_hand: the hand that strikes (droite 1, gauche 0)
+bool g_sim_mirror = false;       // (the fake headset) vr_sim_mirror: the fake hands mirrored, left for right
 double g_strike = 2.4;           // vr_strike_speed: metres a second of the blade's middle (0: off)
 double g_throw = 1.3;            // vr_throw_speed: the hand's speed when it lets go: thrown; slower: put down
 double g_aim_gain = 6.0;         // vr_aim_gain: the stick is pushed fully when the game's aim is 9.5 degrees from the hand
@@ -454,6 +455,10 @@ void configure() {
     g_two_hands = opt_int("vr_two_hands", 1) != 0;
     g_parts_study = opt_int("vr_parts_study", 0) != 0;
     g_main = opt("vr_main_hand", "droite") == "gauche" ? 0 : 1;
+    // vr_left_handed = 1: the sword in the player's left hand, as Link himself holds it, the shield on the right arm;
+    // the bow is then held in the right hand and drawn with the left, whose trigger is the item's button (rt_xr.cpp).
+    if (opt_int("vr_left_handed", 0) != 0) g_main = 0, g_swap = (int)opt_int("vr_swap_hands", 0);
+    g_sim_mirror = opt_int("vr_sim_mirror", 0) != 0;
     g_strike = std::clamp(opt_f("vr_strike_speed", 2.4), 0.0, 20.0), g_throw = std::clamp(opt_f("vr_throw_speed", 1.3), 0.1, 20.0);
     g_aim_gain = std::clamp(opt_f("vr_aim_gain", 6.0), 0.2, 20.0);
     g_aim_stick = opt("vr_aim_stick", "droite") == "gauche" ? 0 : 1;
@@ -481,7 +486,15 @@ bool hand_now(int side, Hand* out) {
     side &= 1;
     if (vr::sim()) {
         if (!g_sim) return false;
-        *out = sim_hand(side);
+        if (!g_sim_mirror) {
+            *out = sim_hand(side);
+            return true;
+        }
+        // (vr_sim_mirror: the fake hands as in a mirror, the left one doing what the right one does: a left-handed player)
+        Hand h = sim_hand(1 - side);
+        for (double* q : {h.q, h.aim_q}) q[1] = -q[1], q[2] = -q[2];
+        h.p[0] = -h.p[0], h.aim_p[0] = -h.aim_p[0], h.vel[0] = -h.vel[0], h.ang[1] = -h.ang[1], h.ang[2] = -h.ang[2];
+        *out = h;
         return true;
     }
     std::lock_guard lk(mu);

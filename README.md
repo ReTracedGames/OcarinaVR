@@ -183,6 +183,9 @@ Keys, with the game's window in front: **P** first / third person, **V** in the 
 - **In the game**: Hookshot's menu (**Insert** key, with the game's window in front), **Graphics** tab, the lines
   starting with "OcarinaVR": first person, big screen, snap turning, Link's body visible, gestures, Link's hands on
   yours, hand tilt, your arm length. They are kept for the next start (`game\retraced_menu.ini`).
+- **Left-handed**: the installer asks which hand holds the sword. To change it later, in `game\retraced.ini`, set `vr_left_handed = 1`: the sword goes to your left hand, as Link
+  himself holds it, the shield to your right arm, and the left trigger becomes the item button. (By default the sword
+  is in your right hand, for right-handed players.)
 - **Comfort**: snap turning is on by default. If your eyes strain, key **O** shows the same picture to both eyes.
 - **Picture size**: in VR the game draws at the size your headset's software recommends. If the game is slow, lower the
   **render resolution in that software** (Meta Quest Link: Devices → your headset → Graphics Preferences; SteamVR:

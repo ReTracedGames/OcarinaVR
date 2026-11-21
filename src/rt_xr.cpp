@@ -481,8 +481,10 @@ void read_pad() {
             if (btn[1]) b |= 1ull << PAD_SOUTH;
             if (btn[2]) b |= 1ull << PAD_NORTH;
             if (btn[3]) b |= 1ull << PAD_WEST;
-            if (val[0] > 0.5f) b |= 1ull << PAD_LTRIGGER;
-            if (val[1] > 0.5f) b |= 1ull << PAD_RTRIGGER;
+            // (the trigger of the hand that draws the bow is the item's button, ZR: the left one for a left-handed player)
+            const int item = hands::main_hand() == 0 ? 0 : 1;
+            if (val[1 - item] > 0.5f) b |= 1ull << PAD_LTRIGGER;
+            if (val[item] > 0.5f) b |= 1ull << PAD_RTRIGGER;
             // (the grips: with the gestures on they close the hands: the left one raises the shield, the right one holds
             // the sword, rt_hands.cpp; L and R as plain buttons are then reached with the left stick's click held)
             const bool chord = btn[5];
