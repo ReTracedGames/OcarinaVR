@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 the ReTraced project
+//
+// VR mode, one eye from the game's single picture: every point of the picture is
+// moved sideways by what its depth says, as the eye beside the camera would see it. Written from the principle
+// (a picture and its depth give a neighbouring view): for each pixel of the eye, the source pixel that lands on it is
+// searched along the row, the nearest surface first; where nothing lands (what the camera did not see behind a near
+// object), the background beside the hole is laid over it, mirrored.
+//
+// The eye's picture is made in the field and the orientation the headset itself gives for that eye (flag 8): found
+// with the real headset: a picture declared with a field of our own (the same each side, wider than the
+// headset's) was shown as if it had the headset's: each eye some 7 degrees off, the other way for the other eye.
+#version 460
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D src;     // the game's finished picture, linear light
+layout(binding = 1) uniform sampler2D zbuf;    // the scene's depth
+layout(binding = 2) uniform sampler2D ui;      // the interface, linear light, colour already times its alpha
+layout(binding = 3, rgba8) uniform writeonly image2D dst;
+layout(binding = 4) uniform sampler2D near;    // rt_vr_near.comp: the largest 1 / distance in each 16 x 16 tile of the picture
+layout(push_constant) uniform PC {
+    vec4 lin;        // the projection's rows 2 and 3: P22, P23, P32, P33
+    vec4 eye_tan;    // the eye's field as tangents: left, right, up, down (left and down are negative)
+    vec4 rot0;       // the eye's orientation against the head, row 0; w: the picture's half field, tangent, sideways
+    vec4 rot1;       // row 1; w: the picture's half field, tangent, upwards
+    vec4 rot2;       // row 2
+    vec2 size;       // of dst (and of src)
+    float shift;     // pixels of the picture a point one unit away moves by; its sign: the way (left eye +, right eye -)
+    float conv;      // 1 / the distance that does not move (0: infinity, the head's own view)
+    float max_px;    // the farthest a point is moved
+    uint flags;      // 1 the interface is laid over, unmoved; 2 holes shown in red (proof); 4 no depth: the picture as it
+                     // is; 8 the eye's own field and orientation (else: pixel for pixel, the big screen); 16 the map of
+                     // near things is given; 32 a fairy's glow (halo); 64 a near thing's rim goes with it; 128 a ring
+                     // where the game aims (sight)
+    vec2 sight;      // where the game aims, in the picture's own frame: tangents, sideways and upwards
+    vec4 halo;       // the fairy that is nearest: where she is in the picture (pixels), how wide her glow is (pixels),
+                     // 1 / her distance
+} pc;
+
+float depth_dist(vec2 q) {   // the view distance the depth gives at a place of the picture
+    const float d = texelFetch(zbuf, ivec2(clamp(q, vec2(0.5), pc.size - 0.5) / pc.size * vec2(textureSize(zbuf, 0))), 0).r;
+    const float n = d * 2.0 - 1.0;
+    const float z = (pc.lin.y - n * pc.lin.w) / (n * pc.lin.z - pc.lin.x);
+    return max(-z, 1e-3);
+}
+float dist_at(float x, float y) {   // the view distance of the scene at a pixel of the picture
+    const vec2 q = clamp(vec2(x, y), vec2(0.5), pc.size - 0.5);
+    float dist = depth_dist(q);
+    // The rim of a near thing: the game's picture blends the thing and what is behind it over a pixel or two at its
+    // edge, and the depth is coarser than the picture. A pixel of the rim that the depth calls "behind" stayed behind
+    // when the thing was moved for an eye, and was copied into the hole beside it: a thin line the colour of the thing,
+    // drawn a little away from it (around the player's own arms, always in the view). A pixel
+    // next to something nearer is taken to be as near: the rim goes with the thing.
+    if ((pc.flags & 64u) != 0u) dist = min(dist, min(depth_dist(q - vec2(1.6, 0.0)), depth_dist(q + vec2(1.6, 0.0))));
+    // A fairy's glow is a flat light the game lays over the picture: it has no depth, so it stayed on the scenery
+    // behind her while her body came forward, and was torn into streaks where she hid the scenery from one eye.
+    // Around her, the picture is taken to
+    // be as near as she is, fading back to the scenery's own depth towards the rim of the glow: the glow comes with her.
+    // (Measured on the fairy that follows Link, 40 cm from the eyes: her ball is 4 cm in radius, the ring of her glow 9.
+    // Whole within 0.65 of the reach, 10 cm; the fade is wide enough for the picture not to fold over itself there.)
+    if ((pc.flags & 32u) != 0u) {
+        const float r = distance(q, pc.halo.xy) / pc.halo.z;
+        if (r < 1.0) dist = min(dist, 1.0 / max(pc.halo.w * (1.0 - smoothstep(0.65, 1.0, r)), 1e-6));
+    }
+    return dist;
+}
+// how far (pixels, along the way) the picture's pixel at x moves
+float moved(float x, float y) { return clamp(abs(pc.shift) * (1.0 / dist_at(x, y) - pc.conv), -pc.max_px, pc.max_px); }
+
+vec3 srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
+void main() {
+    const ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.size.x) || p.y >= int(pc.size.y)) return;
+    float y = float(p.y) + 0.5, xe = float(p.x) + 0.5;   // where this pixel of the eye looks in the picture
+    vec2 look = vec2(1e9);                               // the same as tangents (the head's own view only)
+    if ((pc.flags & 8u) != 0u) {
+        // the direction this pixel looks along, in the eye, then in the head (the picture's own frame)
+        const vec2 uv = (vec2(p) + 0.5) / pc.size;
+        const vec3 de = vec3(mix(pc.eye_tan.x, pc.eye_tan.y, uv.x), mix(pc.eye_tan.z, pc.eye_tan.w, uv.y), -1.0);
+        const vec3 dh = vec3(dot(pc.rot0.xyz, de), dot(pc.rot1.xyz, de), dot(pc.rot2.xyz, de));
+        const vec2 t = dh.xy / max(-dh.z, 1e-4);
+        look = t;
+        xe = (t.x / pc.rot0.w * 0.5 + 0.5) * pc.size.x;
+        y = (0.5 - t.y / pc.rot1.w * 0.5) * pc.size.y;
+        if (dh.z > -1e-4 || xe < 0.0 || xe > pc.size.x || y < 0.0 || y > pc.size.y) {   // (outside the picture: nothing to show)
+            imageStore(dst, p, vec4(0.0, 0.0, 0.0, 1.0));
+            return;
+        }
+    }
+    const float s = pc.shift >= 0.0 ? 1.0 : -1.0;
+    float xs = xe;        // where the eye's pixel is read in the picture
+    bool hole = false;
+    if ((pc.flags & 4u) == 0u && pc.shift != 0.0) {
+        // u: how far back along the way the source is. A source at xe - s u lands on xe when it moves by u. From the
+        // farthest move down: the first source that moves at least that far is the nearest surface reaching xe.
+        const float lo = -abs(pc.shift) * pc.conv - 1.0;
+        // how far the search starts: no source around moves farther than the nearest thing in the tiles the search
+        // crosses (a few pixels in open scenery, far only next to something near)
+        float top = pc.max_px;
+        if ((pc.flags & 16u) != 0u) {
+            const ivec2 nt = textureSize(near, 0) - 1;
+            const int ty = int(y) >> 4, tx = int(xe) >> 4, n = int(pc.max_px) / 16 + 2, way = pc.shift >= 0.0 ? 1 : -1;
+            float inv = 0.0;
+            for (int k = -1; k <= n; ++k) inv = max(inv, texelFetch(near, clamp(ivec2(tx - way * k, ty), ivec2(0), nt), 0).r);
+            top = clamp(ceil(abs(pc.shift) * (inv * 1.01 - pc.conv)) + 2.0, lo + 2.0, pc.max_px);
+        }
+        float u = top, g_prev = -1.0;   // g = moved - u at the step before (u + 1)
+        bool found = false;
+        for (; u >= lo; u -= 1.0) {
+            const float g = moved(xe - s * u, y) - u;
+            if (g >= 0.0) {
+                found = true;
+                if (u >= pc.max_px) break;                 // (nearer than the bound: taken as it is)
+                if (g - g_prev < 1.5) u += g / max(g - g_prev, 1e-3);   // (one surface: where it lands exactly)
+                else {
+                    // a near object's edge moved past xe, the background before it stopped short: a hole. The
+                    // background beside it (at u + 1), mirrored about its own landing place.
+                    hole = true;
+                    const float mb = g_prev + (u + 1.0);   // how far that background moves
+                    const float h = (u + 1.0) - mb;        // how far xe is past the place it lands on
+                    u = (u + 1.0) + h;
+                }
+                break;
+            }
+            g_prev = g;
+        }
+        if (!found) u = lo + 1.0;
+        xs = xe - s * u;
+    }
+    vec3 c = textureLod(src, vec2(xs, y) / pc.size, 0.0).rgb;
+    // (what would be read past the picture's edge was never drawn: black, not the edge's last column smeared, which
+    // showed as streaks beside a near thing at the border: the player's own arms)
+    if (xs < 0.0 || xs > pc.size.x) c = vec3(0.0);
+    if (hole && (pc.flags & 2u) != 0u) c = vec3(1.0, 0.0, 0.0);
+    if ((pc.flags & 1u) != 0u) {
+        const vec4 o = textureLod(ui, vec2(xe, y) / pc.size, 0.0);
+        c = o.rgb + c * (1.0 - clamp(o.a, 0.0, 1.0));
+    }
+    // Where the game aims: a ring and a dot, white with a dark rim, the same in both eyes (far away). The game's own
+    // sight is on the interface's panel, in its middle, wherever the player's hand points: it is left out of the panel
+    // (rt_vr_ui.comp) and this one stands where the shot will go.
+    if ((pc.flags & 128u) != 0u) {
+        const float r = distance(look, pc.sight);
+        if (r < 0.03) {
+            const float rim = max(1.0 - smoothstep(0.0030, 0.0046, abs(r - 0.0150)), 1.0 - smoothstep(0.0038, 0.0054, r));
+            const float white = max(1.0 - smoothstep(0.0012, 0.0024, abs(r - 0.0150)), 1.0 - smoothstep(0.0020, 0.0032, r));
+            c = mix(c, vec3(0.0), rim * 0.6);
+            c = mix(c, vec3(1.0), white);
+        }
+    }
+    imageStore(dst, p, vec4(srgb(c), 1.0));
+}

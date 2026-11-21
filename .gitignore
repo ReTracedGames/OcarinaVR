@@ -1,0 +1,23 @@
+# What the installer makes on your PC: never in git
+_build/
+game/
+
+# Game files: never in this repository
+*.nup
+*.nsp
+*.xci
+*.nsz
+*.nca
+romfs/
+exefs/
+*.bfres*
+*.zs
+
+# Built files
+*.exe
+*.dll
+*.o
+*.obj
+*.pdb
+rt_report.json
+retraced.log

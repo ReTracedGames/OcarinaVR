@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 the ReTraced project
+//
+// VR mode: how near the scene comes in each 16 x 16 tile of the game's picture (the largest 1 / view distance of the
+// tile). The eye pass (rt_vr_warp.comp) searches, for each pixel, the source that lands on it; how far it must search
+// is what the nearest thing around can be moved by. With this map it searches a few pixels in open scenery and far
+// only next to something near: what is close to the eyes (a wall, a face, the player's own hands) can then be moved
+// as far as its depth asks. Before, the move was capped at 64 pixels: anything nearer than 40 cm was
+// shown as if it were at 40 cm, flat.
+#version 460
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D zbuf;                 // the scene's depth
+layout(binding = 1, r16f) uniform writeonly image2D dst;    // one texel a tile
+layout(push_constant) uniform PC {
+    vec4 lin;        // the projection's rows 2 and 3: P22, P23, P32, P33
+    vec2 size;       // of the picture
+    vec2 pad;
+    vec4 halo;       // a fairy's glow, as in rt_vr_warp.comp (its width 0: none)
+} pc;
+
+void main() {
+    const ivec2 t = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 ts = imageSize(dst);
+    if (t.x >= ts.x || t.y >= ts.y) return;
+    const vec2 zs = vec2(textureSize(zbuf, 0));
+    // the depth texels under this tile (one more all round: the eye pass reads depth at the nearest texel)
+    const ivec2 a = max(ivec2(floor(vec2(t) * 16.0 / pc.size * zs)) - 1, ivec2(0));
+    const ivec2 b = min(ivec2(ceil(vec2(t + 1) * 16.0 / pc.size * zs)) + 1, ivec2(zs));
+    float near = 0.0;
+    for (int y = a.y; y < b.y; ++y)
+        for (int x = a.x; x < b.x; ++x) {
+            const float n = texelFetch(zbuf, ivec2(x, y), 0).r * 2.0 - 1.0;
+            const float z = (pc.lin.y - n * pc.lin.w) / (n * pc.lin.z - pc.lin.x);
+            near = max(near, 1.0 / max(-z, 1e-3));
+        }
+    if (pc.halo.z > 0.0) {   // (the nearest the glow makes any pixel of this tile: at the tile's point nearest the fairy)
+        const vec2 c = clamp(pc.halo.xy, vec2(t) * 16.0, vec2(t + 1) * 16.0);
+        const float r = distance(c, pc.halo.xy) / pc.halo.z;
+        if (r < 1.0) near = max(near, pc.halo.w * (1.0 - smoothstep(0.65, 1.0, r)));
+    }
+    imageStore(dst, t, vec4(near));
+}

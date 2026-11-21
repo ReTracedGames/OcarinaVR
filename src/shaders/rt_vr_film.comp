@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 the ReTraced project
+//
+// VR mode, the camera view for filming. The picture the game presents is
+// what the game's window shows on the desk: in the headset's mode it is the head's own picture, almost square, which
+// the window stretches to 16:9, and it shakes with every move of the head. This pass makes, from that picture, the
+// view of a camera that follows the head smoothly, with a 16:9 field, laid so that the window's stretch shows it with
+// its true proportions; the interface is laid over it where the game itself would show it. The headset's own pictures
+// are made before, from the picture as the game drew it.
+//
+// Two uses of the one program: the camera view into an image of ours (flag 2 clear), then that image copied back into
+// the game's picture (flag 2).
+#version 460
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D src;     // the game's finished picture, linear light (flag 2: our image)
+layout(binding = 1) uniform sampler2D ui;      // the interface, linear light, colour already times its alpha
+layout(binding = 2, r11f_g11f_b10f) uniform writeonly image2D dst;
+layout(push_constant) uniform PC {
+    vec4 rot0;       // the camera's orientation against the head, row 0; w: the picture's half field, tangent, sideways
+    vec4 rot1;       // row 1; w: the picture's half field, tangent, upwards
+    vec4 rot2;       // row 2
+    vec2 size;       // of dst (and of src)
+    vec2 field;      // the camera's half field as tangents: sideways, upwards
+    uint flags;      // 1 the interface is laid over; 2 a plain copy
+} pc;
+
+void main() {
+    const ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.size.x) || p.y >= int(pc.size.y)) return;
+    if ((pc.flags & 2u) != 0u) {
+        imageStore(dst, p, vec4(texelFetch(src, p, 0).rgb, 1.0));
+        return;
+    }
+    const vec2 uv = (vec2(p) + 0.5) / pc.size;
+    const vec3 de = vec3((uv.x * 2.0 - 1.0) * pc.field.x, (1.0 - uv.y * 2.0) * pc.field.y, -1.0);
+    const vec3 dh = vec3(dot(pc.rot0.xyz, de), dot(pc.rot1.xyz, de), dot(pc.rot2.xyz, de));
+    vec3 c = vec3(0.0);
+    if (dh.z < -1e-4) {
+        const vec2 t = dh.xy / -dh.z;
+        const vec2 q = vec2(t.x / pc.rot0.w * 0.5 + 0.5, 0.5 - t.y / pc.rot1.w * 0.5);
+        if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) c = textureLod(src, q, 0.0).rgb;
+    }
+    if ((pc.flags & 1u) != 0u) {
+        const vec4 o = textureLod(ui, uv, 0.0);
+        c = o.rgb + c * (1.0 - clamp(o.a, 0.0, 1.0));
+    }
+    imageStore(dst, p, vec4(c, 1.0));
+}
