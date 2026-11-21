@@ -32,6 +32,11 @@ lift a pot and throw it, pull the slingshot's pouch back with your other hand.
   <img src="images/screen-sword.jpg" width="49%" alt="The sword in your own hand, in front of Hyrule Castle">
 </p>
 
+<p align="center">
+  <img src="images/screen-third-person.jpg" width="70%" alt="The same game in the third person: a key gives the game's own camera back, behind Link">
+  <br><em>Third person too: one key gives the game's own camera back, behind Link.</em>
+</p>
+
 ## What it does
 
 - **First person**, at the height of Link's eyes. The head drives the game's own camera, so the game draws what you
