@@ -31,13 +31,28 @@ $out = Join-Path $root 'game'
 
 $hookshotRev = 'bbdc3704678556a3e6d939b17c00ebacc1e25d27'
 $hookshotZip = "https://git.notrexed.dev/Hookshot/Hookshot/archive/$hookshotRev.zip"
+# (the same revision from Longshot, the project that continues Hookshot: its server keeps Hookshot's history, file for file)
+$hookshotZipAlt = "https://git.magicbean.dev/api/v1/repos/MagicBeanDev/Longshot/archive/$hookshotRev.zip"
 $partsUrl = 'https://git.notrexed.dev/Hookshot/Hookshot/releases/download/builder-parts'   # (the parts of Hookshot v2.1.0, the release next to that revision)
+# (when Hookshot's server does not answer: Longshot's copies of the same parts. Each is checked by its own SHA-256; their
+#  files are the same ones, laid out in another folder (altSub: where that folder goes). The app part has no copy there: it
+#  only brings the optional build profiles and the icon, so the game is built without them)
+$altUrl = 'https://git.magicbean.dev/api/packages/MagicBeanDev/generic'
 $parts = @(
-    @{ name = 'python';      file = 'HookshotBuilder-python-a495c4573bc6.zip';      sha = 'a495c4573bc6865a24dedb13e203190f0e145a854ffd03470bcd6a7e5196663b'; url = "$partsUrl/HookshotBuilder-python-a495c4573bc6.zip" },
-    @{ name = 'cpm';         file = 'HookshotBuilder-cpm-c30c77e4cf00.zip';         sha = 'c30c77e4cf000ebf11ec82e79ace4bef3206d3698c61146f7477baa428ea7ef0'; url = "$partsUrl/HookshotBuilder-cpm-c30c77e4cf00.zip" },
-    @{ name = 'third_party'; file = 'HookshotBuilder-third_party-5817b9f7f2a6.zip'; sha = '5817b9f7f2a60fce478eff07b0b6d891b205e90464d94fd21e98c156f9c4a1a0'; url = "$partsUrl/HookshotBuilder-third_party-5817b9f7f2a6.zip" },
-    @{ name = 'wgpu-native'; file = 'HookshotBuilder-wgpu-native-a3b3d8253fba.zip'; sha = 'a3b3d8253fbaedf5975172994c0b45202fe2e4ff89a42ff5bfad53f9468cf498'; url = "$partsUrl/HookshotBuilder-wgpu-native-a3b3d8253fba.zip" },
-    @{ name = 'app';         file = 'HookshotBuilder-app-d592ca8a73f4.zip';         sha = 'd592ca8a73f4ad7b881cb85c63d989757dccbc3058b4d9296a59c6442ea7fcfb'; url = "$partsUrl/HookshotBuilder-app-d592ca8a73f4.zip" },
+    @{ name = 'python';      file = 'HookshotBuilder-python-a495c4573bc6.zip';      sha = 'a495c4573bc6865a24dedb13e203190f0e145a854ffd03470bcd6a7e5196663b'; url = "$partsUrl/HookshotBuilder-python-a495c4573bc6.zip"
+       altFile = 'Longshot-python-c0eb2e3fbaba.zip'; altSha = 'c0eb2e3fbabae82cb7d3dc61ec4b0e9b4b854269d9c38c3bbcc5a08e4497bd12'; altSub = ''
+       altUrl = "$altUrl/python-windows-x64/3.14-hookshot-v2.1.0/c0eb2e3fbabae82cb7d3dc61ec4b0e9b4b854269d9c38c3bbcc5a08e4497bd12-python.zip" },
+    @{ name = 'cpm';         file = 'HookshotBuilder-cpm-c30c77e4cf00.zip';         sha = 'c30c77e4cf000ebf11ec82e79ace4bef3206d3698c61146f7477baa428ea7ef0'; url = "$partsUrl/HookshotBuilder-cpm-c30c77e4cf00.zip"
+       altFile = 'Longshot-cpm-4eeae3a8d501.zip'; altSha = '4eeae3a8d50118dd5c15f2c18dcdc452fbf1dfafceeffcad3bca97aadffe829b'; altSub = 'HookshotBuilder\tools'
+       altUrl = "$altUrl/cpm-windows-x64/hookshot-v2.1.0-dav1d-1.5.4/4eeae3a8d50118dd5c15f2c18dcdc452fbf1dfafceeffcad3bca97aadffe829b-cpm.zip" },
+    @{ name = 'third_party'; file = 'HookshotBuilder-third_party-5817b9f7f2a6.zip'; sha = '5817b9f7f2a60fce478eff07b0b6d891b205e90464d94fd21e98c156f9c4a1a0'; url = "$partsUrl/HookshotBuilder-third_party-5817b9f7f2a6.zip"
+       altFile = 'Longshot-third-party-f6fabdbd9436.zip'; altSha = 'f6fabdbd94360f28761aa784bde9eb107a77e23a1457a1632f558ce8cdfa859c'; altSub = 'HookshotBuilder\tools'
+       altUrl = "$altUrl/third-party-windows-x64/hookshot-v2.1.0/f6fabdbd94360f28761aa784bde9eb107a77e23a1457a1632f558ce8cdfa859c-third-party.zip" },
+    @{ name = 'wgpu-native'; file = 'HookshotBuilder-wgpu-native-a3b3d8253fba.zip'; sha = 'a3b3d8253fbaedf5975172994c0b45202fe2e4ff89a42ff5bfad53f9468cf498'; url = "$partsUrl/HookshotBuilder-wgpu-native-a3b3d8253fba.zip"
+       altFile = 'HookshotBuilder-wgpu-native-a3b3d8253fba.zip'; altSha = 'a3b3d8253fbaedf5975172994c0b45202fe2e4ff89a42ff5bfad53f9468cf498'; altSub = ''
+       altUrl = "$altUrl/wgpu-native-windows-x64/29.0.1.1/a3b3d8253fbaedf5975172994c0b45202fe2e4ff89a42ff5bfad53f9468cf498-wgpu-native.zip" },
+    @{ name = 'app';         file = 'HookshotBuilder-app-d592ca8a73f4.zip';         sha = 'd592ca8a73f4ad7b881cb85c63d989757dccbc3058b4d9296a59c6442ea7fcfb'; url = "$partsUrl/HookshotBuilder-app-d592ca8a73f4.zip"
+       optional = $true },
     @{ name = 'llvm-mingw';  file = 'llvm-mingw-20261104-ucrt-x86_64.zip';          sha = '552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f'; url = 'https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/llvm-mingw-20261104-ucrt-x86_64.zip' },
     @{ name = 'openxr';      file = 'OpenXR.Loader.1.1.65.nupkg';                   sha = '05638c526f07ba3a5f1084bbc3308d654d5167f844ffa1e35515325cb72e0c34'; url = 'https://github.com/KhronosGroup/OpenXR-SDK/releases/download/release-1.1.65/OpenXR.Loader.1.1.65.nupkg' }
 )
@@ -51,6 +66,18 @@ function Say([string]$t) { Write-Host ''; Write-Host "== $t" -ForegroundColor Cy
 function Fetch([string]$url, [string]$file) {
     & $curl -L --fail --silent --show-error --retry 3 -o $file $url
     if ($LASTEXITCODE -ne 0) { throw "download failed: $url" }
+}
+# (the same, but $false instead of an error: a server that does not answer leaves room for the next one; no half file is kept)
+function TryFetch([string]$url, [string]$file) {
+    & $curl -L --fail --silent --retry 2 --connect-timeout 20 -o $file $url   # (no error text: PowerShell would stop on it)
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+    $global:LASTEXITCODE = 0
+    return $false
+}
+function CheckSha([string]$file, [string]$want) {
+    $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
+    if ($sha -ne $want) { Move-Item -LiteralPath $file -Destination ($file + '.bad') -Force; throw "$(Split-Path -Leaf $file): wrong SHA-256 ($sha); the file was set aside as .bad, run the installer again" }
 }
 function Unpack([string]$file, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
@@ -81,12 +108,27 @@ foreach ($p in $parts) {
     $dir = Join-Path $tools $p.name
     $done = Join-Path $dir '.unpacked'
     if (Test-Path $done) { "  $($p.name): ready"; continue }
-    if (-not (Test-Path $file)) { "  $($p.name): downloading"; Fetch $p.url $file }
-    $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
-    if ($sha -ne $p.sha) { Move-Item -LiteralPath $file -Destination ($file + '.bad') -Force; throw "$($p.file): wrong SHA-256 ($sha); the file was set aside as .bad, run the installer again" }
+    $altPath = if ($p.altFile) { Join-Path $dl $p.altFile } else { '' }
+    $useAlt = $false
+    if (-not (Test-Path $file) -and $altPath -and $p.altFile -ne $p.file -and (Test-Path $altPath)) { $useAlt = $true }   # (taken from Longshot last time)
+    elseif (-not (Test-Path $file)) {
+        "  $($p.name): downloading"
+        if (-not $p.altUrl -and -not $p.optional) { Fetch $p.url $file }
+        elseif (-not (TryFetch $p.url $file)) {
+            if ($p.altUrl) {
+                "  $($p.name): Hookshot's server does not answer, Longshot's copy"
+                Fetch $p.altUrl $altPath
+                $useAlt = $true
+            } else {
+                "  $($p.name): Hookshot's server does not answer; this part is optional, the game is built without it"
+                continue
+            }
+        }
+    }
+    if ($useAlt) { CheckSha $altPath $p.altSha } else { CheckSha $file $p.sha }
     "  $($p.name): unpacking"
-    Unpack $file $dir
-    Set-Content -LiteralPath $done -Value $p.sha -Encoding ascii
+    if ($useAlt) { Unpack $altPath (Join-Path $dir $p.altSub) } else { Unpack $file $dir }
+    Set-Content -LiteralPath $done -Value $(if ($useAlt) { $p.altSha } else { $p.sha }) -Encoding ascii
 }
 $py = Join-Path $tools 'python\HookshotBuilder\tools\python\python.exe'
 $mingw = Join-Path $tools 'llvm-mingw\llvm-mingw-20261104-ucrt-x86_64'
@@ -102,7 +144,10 @@ if (-not $CoreOnly) {
     $inner = if (Test-Path $hsRoot) { Get-ChildItem $hsRoot -Directory | Select-Object -First 1 } else { $null }
     if (-not $inner -or -not (Test-Path (Join-Path $inner.FullName 'nx2\make_game.py'))) {
         $zip = Join-Path $dl "hookshot-$($hookshotRev.Substring(0, 7)).zip"
-        if (-not (Test-Path $zip)) { '  downloading'; Fetch $hookshotZip $zip }
+        if (-not (Test-Path $zip)) {
+            '  downloading'
+            if (-not (TryFetch $hookshotZip $zip)) { "  Hookshot's server does not answer: the same revision from Longshot's"; Fetch $hookshotZipAlt $zip }
+        }
         '  unpacking'
         Unpack $zip $hsRoot
         $inner = Get-ChildItem $hsRoot -Directory | Select-Object -First 1
@@ -118,7 +163,7 @@ if (-not $CoreOnly) {
     }
     $wk = Join-Path $tools 'app\HookshotBuilder\tools\work'
     New-Item -ItemType Directory -Force (Join-Path $hs 'work') | Out-Null
-    Copy-Item (Join-Path $wk '*') (Join-Path $hs 'work') -Recurse -Force
+    if (Test-Path $wk) { Copy-Item (Join-Path $wk '*') (Join-Path $hs 'work') -Recurse -Force }
 
     Say 'The VR mode''s hook lines'
     & (Join-Path $root 'tools\apply-hooks.ps1') -Hookshot $hs
